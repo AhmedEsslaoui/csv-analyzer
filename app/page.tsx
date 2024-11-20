@@ -14,6 +14,13 @@ import { Upload, BarChartIcon, PieChartIcon, Copy, Check } from 'lucide-react'
 import { useToast } from "@/components/ui/use-toast"
 import { motion, AnimatePresence } from "framer-motion"
 
+type ChartDataItem = {
+  name: string;
+  value: number;
+  percentage: string;
+  isOther?: boolean;
+};
+
 const Charts = dynamic(() => import('./charts'), {
   ssr: false,
   loading: () => (
@@ -116,7 +123,7 @@ export default function Component() {
     const top3 = sortedData.slice(0, 3)
     const others = sortedData.slice(3)
 
-    const chartData = [...top3]
+    const chartData: ChartDataItem[] = [...top3]
 
     if (others.length > 0) {
       const othersPercentage = others.reduce((sum, item) => sum + parseFloat(item.percentage), 0)

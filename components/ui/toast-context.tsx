@@ -3,9 +3,10 @@
 import * as React from "react"
 import {
   Toast,
-  ToastActionElement,
   ToastProps,
 } from "@radix-ui/react-toast"
+
+type ToastActionElement = React.ReactElement<React.HTMLAttributes<HTMLButtonElement>>
 
 type ToastContextType = {
   toast: (props: ToastProps & { action?: ToastActionElement }) => void
@@ -21,4 +22,21 @@ export const useToast = () => {
   return context
 }
 
-export type { Toast, ToastActionElement, ToastProps }
+export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [toasts, setToasts] = React.useState<(ToastProps & { action?: ToastActionElement })[]>([])
+
+  const toast = React.useCallback((props: ToastProps & { action?: ToastActionElement }) => {
+    setToasts((prevToasts) => [...prevToasts, props])
+  }, [])
+
+  return (
+    <ToastContext.Provider value={{ toast }}>
+      {children}
+      {toasts.map((toastProps, index) => (
+        <Toast key={index} {...toastProps} />
+      ))}
+    </ToastContext.Provider>
+  )
+}
+
+export type { Toast, ToastProps }

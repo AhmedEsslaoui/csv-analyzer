@@ -4,26 +4,68 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'rec
 
 type ChartProps = {
   chartType: 'bar' | 'pie'
-  chartData: { name: string; value: number; percentage: string }[]
+  chartData: ChartDataItem[]
   colors: string[]
 }
 
+type ChartDataItem = {
+  name: string
+  value: number
+  percentage: string
+  isOther?: boolean
+}
+
+type PieActiveShapeProps = {
+  cx: number
+  cy: number
+  midAngle: number
+  innerRadius: number
+  outerRadius: number
+  startAngle: number
+  endAngle: number
+  fill: string
+  payload: ChartDataItem
+  percent: number
+  value: number
+}
+
 const RADIAN = Math.PI / 180
-const renderCustomizedLabel = (props: {
-  cx: number;
-  cy: number;
-  midAngle: number;
-  innerRadius: number;
-  outerRadius: number;
-  percent: number;
-  index: number;
-  name: string;
-  value: number;
-}) => {
-  const { cx, cy, midAngle, innerRadius, outerRadius, percent, name, value } = props
-  const radius = outerRadius + 30
+
+const renderCustomizedLabel = (props: PieActiveShapeProps) => {
+  const { cx, cy, midAngle, innerRadius, outerRadius, percent, payload } = props
+  const radius = innerRadius + (outerRadius - innerRadius) * 0.5
   const x = cx + radius * Math.cos(-midAngle * RADIAN)
   const y = cy + radius * Math.sin(-midAngle * RADIAN)
+
+  return (
+    <text 
+      x={x} 
+      y={y} 
+      fill="white" 
+      textAnchor="middle" 
+      dominantBaseline="central"
+      fontSize="12"
+    >
+      {`${payload.name}: ${(percent * 100).toFixed(0)}%`}
+    </text>
+  )
+}
+
+const renderActiveShape = (props: unknown) => {
+  const {
+    cx,
+    cy,
+    midAngle,
+    innerRadius,
+    outerRadius,
+    startAngle,
+    endAngle,
+    fill,
+    payload,
+    percent,
+    value,
+  } = props as PieActiveShapeProps
+  
   const sin = Math.sin(-RADIAN * midAngle)
   const cos = Math.cos(-RADIAN * midAngle)
   const sx = cx + (outerRadius + 10) * cos
@@ -34,31 +76,6 @@ const renderCustomizedLabel = (props: {
   const ey = my
   const textAnchor = cos >= 0 ? 'start' : 'end'
 
-  return (
-    <g>
-      <path d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`} stroke="#888" fill="none" />
-      <circle cx={ex} cy={ey} r={2} fill="#888" stroke="none" />
-      <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} textAnchor={textAnchor} fill="#333" fontSize={12}>
-        {`${name} (${(percent * 100).toFixed(2)}%)`}
-      </text>
-      <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} dy={18} textAnchor={textAnchor} fill="#999" fontSize={10}>
-        {`${value} entries`}
-      </text>
-    </g>
-  )
-}
-
-const renderActiveShape = (props: {
-  cx: number;
-  cy: number;
-  midAngle: number;
-  innerRadius: number;
-  outerRadius: number;
-  startAngle: number;
-  endAngle: number;
-  fill: string;
-}) => {
-  const { cx, cy, midAngle, innerRadius, outerRadius, startAngle, endAngle, fill } = props
   return (
     <g>
       <Sector
@@ -79,37 +96,28 @@ const renderActiveShape = (props: {
         outerRadius={outerRadius + 10}
         fill={fill}
       />
+      <path d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`} stroke={fill} fill="none" />
+      <circle cx={ex} cy={ey} r={2} fill={fill} stroke="none" />
+      <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} textAnchor={textAnchor} fill="#333" fontSize="14">
+        {`${payload.name} (${(percent * 100).toFixed(2)}%)`}
+      </text>
+      <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} dy={18} textAnchor={textAnchor} fill="#666" fontSize="12">
+        {`${Math.round(value)} entries`}
+      </text>
     </g>
   )
 }
 
 export default function Charts({ chartType, chartData, colors }: ChartProps) {
-  const [activeIndex, setActiveIndex] = useState(0)
+  const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined)
 
-  const onPieEnter = (_: any, index: number) => {
+  const onPieEnter = (_: unknown, index: number) => {
     setActiveIndex(index)
   }
 
-  const adjustedChartData = chartData.map((item, index) => {
-    const isOther = item.name === 'Others'
-    const isHovered = activeIndex === chartData.length - 1 // Only true when "Others" is hovered
-    let adjustedValue = parseFloat(item.percentage)
-
-    if (!isHovered) {
-      if (isOther) {
-        // Make "Others" appear smaller when not hovered
-        adjustedValue = adjustedValue * 0.3
-      } else {
-        // Make top 3 categories appear larger when not hovered
-        adjustedValue = adjustedValue * 2
-      }
-    }
-
-    return {
-      ...item,
-      value: adjustedValue,
-    }
-  })
+  const onPieLeave = () => {
+    setActiveIndex(undefined)
+  }
 
   if (chartType === 'pie') {
     return (
@@ -118,7 +126,7 @@ export default function Charts({ chartType, chartData, colors }: ChartProps) {
           <Pie
             activeIndex={activeIndex}
             activeShape={renderActiveShape}
-            data={adjustedChartData}
+            data={chartData}
             cx="50%"
             cy="50%"
             labelLine={false}
@@ -127,16 +135,24 @@ export default function Charts({ chartType, chartData, colors }: ChartProps) {
             fill="#8884d8"
             dataKey="value"
             onMouseEnter={onPieEnter}
-            onMouseLeave={() => setActiveIndex(-1)}
+            onMouseLeave={onPieLeave}
           >
-            {adjustedChartData.map((entry, index) => (
+            {chartData.map((entry, index) => (
               <Cell 
                 key={`cell-${index}`} 
                 fill={colors[index % colors.length]}
-                opacity={entry.name === 'Others' ? (activeIndex === chartData.length - 1 ? 1 : 0.5) : 1}
+                style={{
+                  filter: activeIndex === index ? 'url(#shadow)' : 'none',
+                  transition: 'filter 0.3s ease-in-out',
+                }}
               />
             ))}
           </Pie>
+          <defs>
+            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="0" stdDeviation="5" floodOpacity="0.5" />
+            </filter>
+          </defs>
         </PieChart>
       </ResponsiveContainer>
     )
@@ -145,7 +161,7 @@ export default function Charts({ chartType, chartData, colors }: ChartProps) {
   return (
     <ResponsiveContainer width="100%" height={500}>
       <BarChart
-        data={adjustedChartData}
+        data={chartData}
         margin={{
           top: 5,
           right: 30,
@@ -156,18 +172,24 @@ export default function Charts({ chartType, chartData, colors }: ChartProps) {
         <CartesianGrid strokeDasharray="3 3" />
         <XAxis dataKey="name" />
         <YAxis />
-        <Tooltip />
+        <Tooltip 
+          formatter={(value: number) => Math.round(value)}
+          labelFormatter={(label) => `Category: ${label}`}
+        />
         <Legend />
         <Bar 
           dataKey="value" 
           onMouseEnter={(_, index) => setActiveIndex(index)}
-          onMouseLeave={() => setActiveIndex(-1)}
+          onMouseLeave={() => setActiveIndex(undefined)}
         >
-          {adjustedChartData.map((entry, index) => (
+          {chartData.map((entry, index) => (
             <Cell 
               key={`cell-${index}`} 
               fill={colors[index % colors.length]}
-              opacity={entry.name === 'Others' ? (activeIndex === chartData.length - 1 ? 1 : 0.5) : 1}
+              style={{
+                filter: activeIndex === index ? 'url(#shadow)' : 'none',
+                transition: 'filter 0.3s ease-in-out',
+              }}
             />
           ))}
         </Bar>
